@@ -1,0 +1,3 @@
+[submodule "src/linktest"]
+	path = src/linktest
+	url = https://gitlab.jsc.fz-juelich.de/cstao-public/linktest.git

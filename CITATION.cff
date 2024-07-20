@@ -1,0 +1,32 @@
+cff-version: 1.2.0
+title: "JUPITER Benchmark Suite: LinkTest"
+message: >-
+  In addition to citing this benchmark repository, please also cite either the JUPITER Benchmark Suite or the accompanying SC24 paper
+authors:
+  - given-names: Yannik
+    family-names: Müller
+    affiliation: Forschungszentrum Jülich, Jülich Supercomputing Centre
+    orcid: 'https://orcid.org/0009-0001-5696-6512'
+  - given-names: Max
+    family-names: Holicki
+    affiliation: Forschungszentrum Jülich, Jülich Supercomputing Centre
+  - given-names: Andreas
+    family-names: Herten
+    affiliation: Forschungszentrum Jülich, Jülich Supercomputing Centre
+    orcid: 'https://orcid.org/0000-0002-7150-2505'
+  - given-names: Sebastian
+    family-names: Achilles
+    affiliation: Forschungszentrum Jülich, Jülich Supercomputing Centre
+    orcid: 'https://orcid.org/0000-0002-1943-6803'
+abstract: "The LinkTest benchmark of the JUPITER Benchmark Suite"
+identifiers:
+  - type: doi
+    value: 10.5281/zenodo.12787776
+    description: Version-agnostic Zenodo Identifier
+repository-code: 'https://github.com/FZJ-JSC/jubench-linktest/'
+license: MIT
+date-released: '2024-07-20'
+references:
+  - title: "JUPITER Benchmark Suite"
+    type: software
+    doi: 10.5281/zenodo.12737073

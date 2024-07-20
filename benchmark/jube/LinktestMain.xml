@@ -1,0 +1,208 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<jube>
+<benchmark name="JSC LinkTest" outpath="runs">
+<comment>JSC LinkTest for exascale systems</comment>
+
+<fileset name="Sources">
+	<copy>../../src/linktest/benchmark</copy>
+</fileset>
+<fileset name="ReportSources">
+	<copy>../../src/linktest/python</copy>
+</fileset>
+<fileset name="jobfiles">
+	<copy>submit.job.in</copy>
+</fileset>
+
+<substituteset name="executesub" init_with="platform.xml">
+</substituteset>
+
+<parameterset name="system">
+	<parameter name="System_Name" mode="shell">cat /etc/FZJ/systemname | tr -d '\n'</parameter>
+	<!-- System_Name can be completly removed if the script is only required to work on one system -->
+	<parameter name="Use_Devel_Partition">True</parameter>
+	<!-- Use_Devel_Partition can be completly removed if the script is only required to work on one partition -->
+	<parameter name="Use_GPU_Partition">True</parameter>
+	<!-- 
+		True for GPU systems or hybrid systems if GPUs should be used, 
+		False if only CPUs should be used 
+		(do not completly remove this one) 
+	-->
+	<parameter name="Partition" mode="python">
+	{
+		"juwels":
+			[
+				["batch","gpus"],
+				["devel","develgpus"],
+			],
+		"juwelsbooster":
+			[
+				["","booster"],
+				["","develbooster"],
+			],
+		"jurecadc":
+			[
+				["dc-cpu","dc-gpu"],
+				["dc-cpu-devel","dc-gpu-devel"],
+			],
+	}["${System_Name}"][${Use_Devel_Partition}][${Use_GPU_Partition}]
+	</parameter>
+	<!-- <parameter name="Partition">partition_name_known_to_srun</parameter> -->
+	<parameter name="GPUs_per_Node" type="int" mode="python">
+	4 if ${Use_GPU_Partition} else 0
+	</parameter>
+	<!-- Change 4 to whatever your number of GPUs per node is. For CPU only System the number is irrelevant -->
+	<parameter name="HCAs_per_Node" type="int" mode="python">
+	{
+		"juwels":        [1,2],
+		"juwelsbooster": [0,4],
+		"jurecadc":      [1,2],
+	} [ "${System_Name}" ] [ ${Use_GPU_Partition} ]
+	</parameter>
+	<!-- <parameter name="HCAs_per_Node" type="int">HCAs_per_Node</parameter> -->
+</parameterset>
+<parameterset name="environment">
+	<parameter name="CUDA" mode="python">"CUDA" if ${Use_GPU_Partition} else ""</parameter>
+	<parameter name="Load_Modules" tag="pdf">module load GCC OpenMPI $CUDA SIONlib Python SciPy-Stack; module list</parameter>
+	<parameter name="Load_Modules" tag="!pdf">module load GCC OpenMPI $CUDA SIONlib; module list</parameter>
+</parameterset>
+<parameterset name="build">
+	<parameter name="CuArch" mode="python">
+		{
+			"juwels":        "sm_70",
+			"juwelsbooster": "sm_80",
+			"jurecadc":      "sm_80",
+		}[ "${System_Name}" ]
+	</parameter>
+	<!-- <parameter name="CuArch">sm_XY</parameter> For possible values see https://docs.nvidia.com/cuda/cuda-compiler-driver-nvcc/index.html#virtual-architecture-feature-list -->
+	<parameter name="HAVE_CUDA" mode="python">int(${Use_GPU_Partition})</parameter>
+	<parameter name="Make">make -j 12 HAVE_MPI=1 HAVE_CUDA=${HAVE_CUDA} CUARCH=${CuArch}</parameter>
+</parameterset>
+<parameterset name="linktestArgs">
+	<parameter name="Mode">mpi</parameter>
+	<parameter name="Number_Of_WarmUp_Messages">3</parameter>
+	<parameter name="Number_Of_Messages" tag="!test">25</parameter>
+	<parameter name="Number_Of_Messages" tag="test">3</parameter>
+	<parameter name="Message_Size" mode="python" type="int">2**24</parameter>
+	<parameter name="Use_GPU_Memory" mode="python">"--use-gpu-memory" if ${Use_GPU_Partition} else ""</parameter>
+	<parameter name="Extra_Linktest_Args">--bidirectional --bisection $Use_GPU_Memory</parameter>
+</parameterset>
+<parameterset name="executeset" init_with="platform.xml">
+	<parameter name="args_starter" separator=";">--het-group=0,1 --cpu-bind=v,rank_ldom --distribution=block</parameter>
+</parameterset>
+<parameterset name="systemParameter" init_with="platform.xml">
+	<parameter name="queue">${Partition}</parameter>
+	<parameter name="timelimit">01:00:00</parameter>
+	<parameter name="nodes" tag="!test">196</parameter>
+	<!-- <parameter name="nodes" tag="!test">num_available_nodes</parameter> -->
+	<parameter name="nodes" tag="test">2</parameter>
+	<parameter name="halfNodes" mode="python" type="int">$nodes // 2</parameter>
+	<parameter name="taskspernode">${HCAs_per_Node}</parameter>
+	<parameter name="tasks"></parameter>
+	<parameter name="gres" mode="python">["","gpu:${GPUs_per_Node}"][${Use_GPU_Partition}]</parameter>
+	<parameter name="account">jscbenchmark</parameter>
+	<!-- <parameter name="account">slurm_account_name</parameter> -->
+	<parameter name="additional_job_config">
+#SBATCH --nodes=$halfNodes
+#SBATCH --ntasks-per-node=$taskspernode
+#SBATCH --constraint="bcell05|bcell06"
+#SBATCH hetjob
+#SBATCH --nodes=$halfNodes
+#SBATCH --ntasks-per-node=$taskspernode
+#SBATCH --constraint="bcell07|bcell08"
+	</parameter>
+	<!-- constraint="bcell07|bcell08" is a example measures to ensure proper bisection. 
+	     remember first n/2 tasks need to be on one half of the system. 
+	     you need to know what is the right way to launch for your system -->
+	<parameter name="CUDA" mode="python">"CUDA" if ${Use_GPU_Partition} else ""</parameter>
+	<parameter name="env">$Load_Modules</parameter>
+	<parameter name="executable">Compile/benchmark/linktest</parameter>
+	<parameter name="args_exec"> \
+		--mode $Mode \
+		--num-warmup-messages $Number_Of_WarmUp_Messages \
+		--num-messages $Number_Of_Messages \
+		--size-messages $Message_Size \
+		$Extra_Linktest_Args
+	</parameter>
+	<parameter name="postprocess" tag="pdf">
+		source CompileLinktestReport/venvLinktest/bin/activate
+		linktest-report -i pingpong_results_bin.sion -o linktest-bisection-${System_Name}.pdf
+		deactivate
+	</parameter>
+</parameterset>
+
+<step name="Compile">
+	<use>Sources, system, environment, build</use>
+	<do>
+		$Load_Modules
+		cd benchmark
+		$Make
+	</do>
+</step>
+
+<step name="CompileLinktestReport" tag="pdf">
+	<use>ReportSources, system, environment, systemParameter</use>
+	<do>
+		$Load_Modules
+		CPATH=/p/software/${System_Name}/stages/2023/software/SciPy-bundle/2022.05-gcccoremkl-11.3.0-2022.1.0/lib/python3.10/site-packages/numpy/core/include:$CPATH
+		<!-- Maybe you need to workaround paths here -->
+		<!-- export CPATH=<path_to_numpy_c_includes>:$CPATH -->
+		python3 -m venv venvLinktest
+		source venvLinktest/bin/activate
+		pip install ./python
+		deactivate
+	</do> 
+</step>
+
+<step name="BisectionTest" depend="Compile,CompileLinktestReport" tag="pdf">
+	<use>system, linktestArgs, systemParameter, executeset, jobfiles, executesub</use>
+	<do done_file="$done_file" error_file="$error_file">${submit} ${submit_script}</do>
+</step>
+<step name="BisectionTest" depend="Compile" tag="!pdf">
+	<use>system, linktestArgs, systemParameter, executeset, jobfiles, executesub</use>
+	<do done_file="$done_file" error_file="$error_file">${submit} ${submit_script}</do>
+</step>
+
+<patternset name="LinktestOutPatterns"> 
+	<pattern name="min_time">RESULT: Min Time:\s+(${jube_pat_nfp} .*?)\s</pattern>
+	<pattern name="avg_time">RESULT: Avg Time:\s+(${jube_pat_nfp} .*?)\s</pattern>
+	<pattern name="max_time">RESULT: Max Time:\s+(${jube_pat_nfp} .*?)\s</pattern> 
+	<pattern name="max_bw"  >RESULT: Min Time: .*? \(\s+(${jube_pat_nfp}.*?)\)</pattern>
+	<pattern name="avg_bw"  >RESULT: Avg Time: .*? \(\s+(${jube_pat_nfp}.*?)\)</pattern>
+	<pattern name="min_bw"  >RESULT: Max Time: .*? \(\s+(${jube_pat_nfp}.*?)\)</pattern>
+	<pattern name="step_bisect_bw" type="float">Parallel Results for step .*? bisection bw:\s+${jube_pat_fp}</pattern>
+	<pattern name="step_bisect_bw_unit"        >Parallel Results for step .*? bisection bw:\s+${jube_pat_nfp}\s+(.*?)$</pattern>
+	<pattern name="agg_bisect_bw" type="float">Aggregated Results: .*? bisection bw:\s+${jube_pat_fp}</pattern>
+</patternset>
+
+<!-- Analyse -->
+<analyser name="analyseRuns">
+	<analyse step="BisectionTest">
+		<file use="LinktestOutPatterns">${outlogfile}</file>
+	</analyse>
+</analyser>
+
+<!-- Results -->
+<result>
+	<use>analyseRuns</use>
+	<table name="Configuration" style="pretty">
+		<column title="Messages">Number_Of_Messages</column>
+		<column title="Size">Message_Size</column>
+		<column title="Options">Extra_Linktest_Args</column>
+		<column title="Nodes">nodes</column>
+		<column title="Tasks per Nodes">taskspernode</column>
+	</table>
+	<table name="Point-to-point Bandwidth Results" style="pretty">
+		<column title="Min">min_bw</column>
+		<column title="Avg">avg_bw</column>
+		<column title="Max">max_bw</column>
+	</table>
+	<table name="Bisection Bandwidth Results" style="pretty">
+		<column title="Unit">step_bisect_bw_unit</column>
+		<column title="Min">step_bisect_bw_min</column>
+		<column title="Avg">agg_bisect_bw_last</column>
+		<column title="Max">step_bisect_bw_max</column>
+	</table>
+</result>
+
+</benchmark>
+</jube>
