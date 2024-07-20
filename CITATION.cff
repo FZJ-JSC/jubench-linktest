@@ -21,7 +21,7 @@ authors:
 abstract: "The LinkTest benchmark of the JUPITER Benchmark Suite"
 identifiers:
   - type: doi
-    value: 10.5281/zenodo.12787776
+    value: 10.5281/zenodo.12788705
     description: Version-agnostic Zenodo Identifier
 repository-code: 'https://github.com/FZJ-JSC/jubench-linktest/'
 license: MIT
